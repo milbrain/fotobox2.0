@@ -1,0 +1,4 @@
+__pycache__/
+res/qr/*
+res/preview/*
+res/img/*
