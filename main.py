@@ -6,16 +6,19 @@ from PyQt5.QtCore import *#QObject, pyqtSignal
 from PyQt5.QtWidgets import QWidget, QApplication
 
 import Server, GUI
-import sys, logging, threading, argparse
+import sys, logging, threading
 
 class Controls(QObject):
+    
+    ip = '127.0.0.222'                      # use dnsmasq to create an alias in /etc/hosts file
+    dnsString = 'get.raspberry.images'  # current dnsmasq alias for self.ip
     
     def initServer(self):
         ''' Inits the server that is used to communicate with the webapp, sets up
         the signals needed for the communication and starts the server thread. '''
         port = 1337
-        ip = '127.0.0.222'
-        server_address = (ip, port)
+        
+        server_address = (self.ip, port)
         self.server = Server.MyServer(server_address, Server.RequestHandler)
         self.server.handler = Server.RequestHandler
         self.server.handler.mainref = self
