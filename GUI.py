@@ -70,7 +70,7 @@ class GUI(QMainWindow):
         # set new Image Number because everything worked out
         self.currentBigImage = newImgNr
         
-        # Realign small preview images (if neccessary
+        # Realign small preview images (if neccessary)
         imgDir = QDir(self.imageFilepath)
         existingImages = imgDir.count() - 2
         if (newImgNr < math.ceil(self.totalPreviewImages/2) or
@@ -86,11 +86,9 @@ class GUI(QMainWindow):
         pixmap = self.generatePreviewImage(newImgNr - math.floor(self.totalPreviewImages/2))
         if pixmap:
             self.preLabels[0][0].setPixmap(pixmap)
-        
-        print('scrolledLeft')
+
 
     def scrollRight(self):
-        #TODO: Adjust scrolling to fit the initially loaded view
         newImgNr = self.currentBigImage + 1
         
         # bigPreviewImage
@@ -103,28 +101,31 @@ class GUI(QMainWindow):
         # set new Image Number because everything worked out
         self.currentBigImage = newImgNr
         
-        # Realign small preview images (if neccessary
+        # Realign small preview images (if neccessary)
         imgDir = QDir(self.imageFilepath)
         existingImages = imgDir.count() - 2
-        if (newImgNr > (existingImages - math.floor(self.totalPreviewImages/2)) or
+        if (newImgNr <= math.ceil(self.totalPreviewImages/2) or
             existingImages <= self.totalPreviewImages):
             return
         
         for i in range(0,self.totalPreviewImages-1, 1):
             pixmap = self.preLabels[i+1][0].pixmap()
-            print('Assigning pixmap from ', i+1, ' to ', i)
             if pixmap:
                 self.preLabels[i][0].setPixmap(pixmap)
+            else:
+                pix = QPixmap(self.previewImageSize.x(), self.previewImageSize.y())
+                pix.fill(QColor(0,0,0,0))
+                self.preLabels[i][0].setPixmap(pix)
 
         pixmap = self.generatePreviewImage(newImgNr + math.floor(self.totalPreviewImages/2))
+        print('generate ', newImgNr + math.floor(self.totalPreviewImages/2))
         if pixmap:
             self.preLabels[self.totalPreviewImages-1][0].setPixmap(pixmap)
         else:
-            #TODO: Set clear pixmap
-            #self.preLabels[self.totalPreviewImages-1][0]
-            pass
-        
-        print('scrolledRight')
+            pix = QPixmap(self.previewImageSize.x(), self.previewImageSize.y())
+            pix.fill(QColor(0,0,0,0))
+            self.preLabels[self.totalPreviewImages-1][0].setPixmap(pix)
+
         
     def _setupBigImage(self):
         bigWidth = self.formSize.x() - 165 - 10 - 20 # qrWidth, border, inBetweenSpace
