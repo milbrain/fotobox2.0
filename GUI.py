@@ -95,7 +95,6 @@ class GUI(QMainWindow):
             pstr += str(self.preLabels[i][1]) + " "
         print("Scrolling finished. Position is: " + pstr)
 
-
     def scrollRight(self):
         newImgNr = self.currentBigImage + 1
         
@@ -148,17 +147,20 @@ class GUI(QMainWindow):
         print("Scrolling finished. Position is: " + pstr)
         
     def _setupBigImage(self):
+        ''' Load newest picture into the bigLabel. '''
         bigWidth = self.formSize.x() - 165 - 10 - 20 # qrWidth, border, inBetweenSpace
         bigHeight = self.formSize.y() - self.previewImageSize.y() - 10 - 20
+        size = QRect(10, 10, bigWidth, bigHeight)
         self.bigImageSize = QPoint(bigWidth, bigHeight)
         
-        size = QRect(10, 10, bigWidth, bigHeight)
+        imgDir = QDir(self.previewFilepath)
+        existingImages = imgDir.count() - 2
+        
         self.bigLabel = (QLabel(self), 0)
         self.bigLabel[0].setGeometry(size)
         self.bigLabel[0].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
         self.bigLabel[0].show()
-        self.loadBigImage(self.currentBigImage, bigWidth, bigHeight)
-        
+        self.loadBigImage(existingImages, bigWidth, bigHeight)   
         
     def loadBigImage(self, imgNr, w, h):
         ''' Loads the big preview label with the existing image referenced by imgNr. '''
@@ -171,56 +173,62 @@ class GUI(QMainWindow):
         pixmap = QtGui.QPixmap.fromImage(img.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         self.bigLabel[0].setPixmap(pixmap)
         self.bigLabel = (self.bigLabel[0], imgNr)
-        return True
-        
+        return True    
         
     def _setupPreviewImages(self):
-        ''' Generates all preview images in the form. '''
+        ''' Loads all preview images into the form. '''
         formWidth = self.formSize.x()
         formHeigth = self.formSize.y()
         preWidth = self.previewImageSize.x()
         preHeight = self.previewImageSize.y()
         existingImages = 0
         
-        imgDir = QDir(self.imageFilepath)
+        imgDir = QDir(self.previewFilepath)
         existingImages = imgDir.count() - 2
         
         self.preLabels = []
         inBetweenSpace = (formWidth - 20 - preWidth*self.totalPreviewImages) / (self.totalPreviewImages-1)
         
-        imgToGenerate = self.currentBigImage - math.floor(self.totalPreviewImages/2)
+        # Which image should be loaded first starting from left to right?
+        imgToGenerate = existingImages - math.floor(self.totalPreviewImages/2)
         if imgToGenerate < 1:
+            # Only few images exist in preview folder (in standard configuration: 2 or less)
+            # We work with what we've got
             imgToGenerate = 1
+        
         for i in range(0,self.totalPreviewImages,1):
+            # Create as many labels as requested in totalPreviewImages
             size = QRect(10 + i*preWidth + inBetweenSpace*i, formHeigth - preHeight - 10,
                          preWidth, preHeight)
             self.preLabels.append((QtWidgets.QLabel(self), i+1))
             self.preLabels[i][0].setGeometry(size)
             self.preLabels[i][0].setAlignment(Qt.AlignCenter)
             
-            # Border for active image
-            self.preLabels[i][0].setLineWidth(3)   # does not make the line visible yet
-            if i == math.ceil(self.totalPreviewImages/2):
-                self.preLabels[0][0].setFrameShape(QFrame.Panel)
-            #self.preLabels[0][0].setFrameShape(QFrame.NoFrame)
-            
+            # Iteratively try to generate the next picture
             pixmap = self.generatePreviewImage(imgToGenerate)
-
             if pixmap:
                 self.preLabels[i][0].setPixmap(pixmap)
                 self.preLabels[i] = (self.preLabels[i][0], imgToGenerate)
             else:
+                # No more pictures left to load
                 self.preLabels[i] = (self.preLabels[i][0], 0)
                 
-            
             self.preLabels[i][0].show()
             imgToGenerate += 1
+        
         
         # === DEBUG ===
         pstr = ""
         for i in range(len(self.preLabels)):
             pstr += str(self.preLabels[i][1]) + " "
         print("Setting up preview finished. Position is: " + pstr)
+        
+        # Snippet for future use
+        # Border for active image
+        #self.preLabels[i][0].setLineWidth(3)   # does not make the line visible yet
+        #if i == math.ceil(self.totalPreviewImages/2):
+        #    self.preLabels[0][0].setFrameShape(QFrame.Panel)
+        #self.preLabels[0][0].setFrameShape(QFrame.NoFrame)
         
         
     def generatePreviewImage(self, imgNr):
