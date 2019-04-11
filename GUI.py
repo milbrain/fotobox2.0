@@ -22,8 +22,12 @@ class GUI(QMainWindow):
     previewImageSize = QPoint(165, 165)
     totalPreviewImages = 5
     
-    currentBigImage = 6                 # ImageNr from current bigImage
     bigImageSize    = None              # is only set after the first call to _setupBigImage
+    
+    bigLabel        = (0, 0)            # Tuple with reference to a QLabel and the ImageNr currently stored there
+                                        # only available after _setupBigImage
+    preLabels       = []                # List of tuples of the same form as bigLabel, just for the preview labels
+                                        # only available after _setupPreviewImages
     
     def __init__(self, cont):
         super().__init__()
@@ -58,7 +62,7 @@ class GUI(QMainWindow):
             
         
     def scrollLeft(self):
-        newImgNr = self.currentBigImage - 1
+        newImgNr = self.bigLabel[1] - 1
         
         # bigPreviewImage
         if newImgNr <= 0 or not self.loadBigImage(newImgNr, self.bigImageSize.x(), self.bigImageSize.y()):
@@ -68,7 +72,7 @@ class GUI(QMainWindow):
         self.generateOrLoadQR(newImgNr)
         
         # set new Image Number because everything worked out
-        self.currentBigImage = newImgNr
+        self.bigLabel = (self.bigLabel[0], newImgNr)
         
         # Realign small preview images (if neccessary)
         imgDir = QDir(self.imageFilepath)
@@ -96,7 +100,7 @@ class GUI(QMainWindow):
         print("Scrolling finished. Position is: " + pstr)
 
     def scrollRight(self):
-        newImgNr = self.currentBigImage + 1
+        newImgNr = self.bigLabel[1] + 1
         
         # bigPreviewImage
         if newImgNr <= 0 or not self.loadBigImage(newImgNr, self.bigImageSize.x(), self.bigImageSize.y()):
@@ -106,7 +110,7 @@ class GUI(QMainWindow):
         self.generateOrLoadQR(newImgNr)
         
         # set new Image Number because everything worked out
-        self.currentBigImage = newImgNr
+        self.bigLabel = (self.bigLabel[0], newImgNr)
         
         # Realign small preview images (if neccessary)
         imgDir = QDir(self.imageFilepath)
@@ -258,7 +262,7 @@ class GUI(QMainWindow):
         self.qrlabel = QtWidgets.QLabel(self)
         self.qrlabel.setGeometry(size)
         
-        self.generateOrLoadQR(self.currentBigImage)
+        self.generateOrLoadQR(self.bigLabel[1])
         self.qrlabel.show()
         
     
