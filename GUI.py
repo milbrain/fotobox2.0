@@ -79,13 +79,21 @@ class GUI(QMainWindow):
         
         for i in range(self.totalPreviewImages-1, 0,-1):
             pixmap = self.preLabels[i-1][0].pixmap()
-            print('Assigning pixmap from ', i-1, ' to ', i)
             if pixmap:
                 self.preLabels[i][0].setPixmap(pixmap)
+                self.preLabels[i] = (self.preLabels[i][0], self.preLabels[i-1][1])
 
+        # Load new picture into leftmost preview label
         pixmap = self.generatePreviewImage(newImgNr - math.floor(self.totalPreviewImages/2))
         if pixmap:
             self.preLabels[0][0].setPixmap(pixmap)
+            self.preLabels[0] = (self.preLabels[0][0], newImgNr - math.floor(self.totalPreviewImages/2))
+        
+        # === DEBUG ===
+        pstr = ""
+        for i in range(len(self.preLabels)):
+            pstr += str(self.preLabels[i][1]) + " "
+        print("Scrolling finished. Position is: " + pstr)
 
 
     def scrollRight(self):
@@ -112,20 +120,32 @@ class GUI(QMainWindow):
             pixmap = self.preLabels[i+1][0].pixmap()
             if pixmap:
                 self.preLabels[i][0].setPixmap(pixmap)
+                self.preLabels[i] = (self.preLabels[i][0], self.preLabels[i+1][1])
+                #self.preLabels[i][0].setText(str(self.preLabels[i][1])) #t1
             else:
                 pix = QPixmap(self.previewImageSize.x(), self.previewImageSize.y())
                 pix.fill(QColor(0,0,0,0))
                 self.preLabels[i][0].setPixmap(pix)
+                self.preLabels[i] = (self.preLabels[i][0], 0)
 
+        # Load new picture into rightmost preview label
         pixmap = self.generatePreviewImage(newImgNr + math.floor(self.totalPreviewImages/2))
-        print('generate ', newImgNr + math.floor(self.totalPreviewImages/2))
         if pixmap:
             self.preLabels[self.totalPreviewImages-1][0].setPixmap(pixmap)
+            self.preLabels[self.totalPreviewImages-1] = (self.preLabels[self.totalPreviewImages-1][0],
+                                                         newImgNr + math.floor(self.totalPreviewImages/2))
+            #self.preLabels[self.totalPreviewImages-1][0].setText(str(self.preLabels[self.totalPreviewImages-1][1])) #t1
         else:
             pix = QPixmap(self.previewImageSize.x(), self.previewImageSize.y())
             pix.fill(QColor(0,0,0,0))
             self.preLabels[self.totalPreviewImages-1][0].setPixmap(pix)
+            self.preLabels[self.totalPreviewImages-1] = (self.preLabels[self.totalPreviewImages-1][0], 0)
 
+        # === DEBUG ===
+        pstr = ""
+        for i in range(len(self.preLabels)):
+            pstr += str(self.preLabels[i][1]) + " "
+        print("Scrolling finished. Position is: " + pstr)
         
     def _setupBigImage(self):
         bigWidth = self.formSize.x() - 165 - 10 - 20 # qrWidth, border, inBetweenSpace
@@ -133,10 +153,10 @@ class GUI(QMainWindow):
         self.bigImageSize = QPoint(bigWidth, bigHeight)
         
         size = QRect(10, 10, bigWidth, bigHeight)
-        self.bigLabel = QLabel(self)
-        self.bigLabel.setGeometry(size)
-        self.bigLabel.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-        self.bigLabel.show()
+        self.bigLabel = (QLabel(self), 0)
+        self.bigLabel[0].setGeometry(size)
+        self.bigLabel[0].setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+        self.bigLabel[0].show()
         self.loadBigImage(self.currentBigImage, bigWidth, bigHeight)
         
         
@@ -149,7 +169,8 @@ class GUI(QMainWindow):
         
         img = QImage(filepath)
         pixmap = QtGui.QPixmap.fromImage(img.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        self.bigLabel.setPixmap(pixmap)
+        self.bigLabel[0].setPixmap(pixmap)
+        self.bigLabel = (self.bigLabel[0], imgNr)
         return True
         
         
@@ -177,14 +198,29 @@ class GUI(QMainWindow):
             self.preLabels[i][0].setGeometry(size)
             self.preLabels[i][0].setAlignment(Qt.AlignCenter)
             
+            # Border for active image
+            self.preLabels[i][0].setLineWidth(3)   # does not make the line visible yet
+            if i == math.ceil(self.totalPreviewImages/2):
+                self.preLabels[0][0].setFrameShape(QFrame.Panel)
+            #self.preLabels[0][0].setFrameShape(QFrame.NoFrame)
+            
             pixmap = self.generatePreviewImage(imgToGenerate)
+
             if pixmap:
                 self.preLabels[i][0].setPixmap(pixmap)
+                self.preLabels[i] = (self.preLabels[i][0], imgToGenerate)
+            else:
+                self.preLabels[i] = (self.preLabels[i][0], 0)
+                
             
             self.preLabels[i][0].show()
             imgToGenerate += 1
-        #self.preLabels[0][0].setLineWidth(1)
-        #self.preLabels[0][0].setFrameShape(QFrame.Panel)
+        
+        # === DEBUG ===
+        pstr = ""
+        for i in range(len(self.preLabels)):
+            pstr += str(self.preLabels[i][1]) + " "
+        print("Setting up preview finished. Position is: " + pstr)
         
         
     def generatePreviewImage(self, imgNr):
