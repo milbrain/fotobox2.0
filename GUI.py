@@ -51,8 +51,8 @@ class GUI(QMainWindow):
         self.setWindowTitle('Fotobox v2.0')
         self.show()
         
-        self._setupPreviewImages()
         self._setupBigImage()
+        self._setupPreviewImages()
         self._setupQRCode()
         self.grabKeyboard()     # grabs all keyboard inputs to be handled for scrolling through preview images
         
@@ -95,6 +95,8 @@ class GUI(QMainWindow):
             self.preLabels.append(preview)
             self.preLabels[i].label.setGeometry(size)
             self.preLabels[i].label.setAlignment(Qt.AlignCenter)
+            self.preLabels[i].label.setFrameShape(QFrame.NoFrame)
+            self.preLabels[i].label.setLineWidth(0)
             
             # Iteratively try to generate the next picture
             pixmap = self.generatePreviewImage(imgToGenerate)
@@ -108,19 +110,13 @@ class GUI(QMainWindow):
             self.preLabels[i].label.show()
             imgToGenerate += 1
         
+        self._highlightActivePreview()
         
         # === DEBUG ===
         pstr = ""
         for i in range(len(self.preLabels)):
             pstr += str(self.preLabels[i].imageNr) + " "
         print("Setting up preview finished. Position is: " + pstr)
-        
-        # Snippet for future use
-        # Border for active image
-        #self.preLabels[i][0].setLineWidth(3)   # does not make the line visible yet
-        #if i == math.ceil(self.totalPreviewImages/2):
-        #    self.preLabels[0][0].setFrameShape(QFrame.Panel)
-        #self.preLabels[0][0].setFrameShape(QFrame.NoFrame)
 
     def generatePreviewImage(self, imgNr):
         ''' Generates the preview Image according to the parameter imgNr. Returns the generated pixmap or False
@@ -169,6 +165,25 @@ class GUI(QMainWindow):
         self.bigLabel.label.setPixmap(pixmap)
         self.bigLabel.imageNr = imgNr
         return True    
+
+    def _highlightActivePreview(self):
+        ''' Change the border of the preview labels to adequately highlight the image
+        currently beeing displayed in bigLabel. '''
+        highlightWidth = 3
+        noHighlightWidth = 0
+        
+        for i in range(self.totalPreviewImages):
+            # If the current image is not highlighted, but should be
+            if (self.preLabels[i].label.lineWidth() == noHighlightWidth and
+                    self.bigLabel.imageNr == self.preLabels[i].imageNr):
+                self.preLabels[i].label.setLineWidth(highlightWidth)
+                self.preLabels[i].label.setFrameShape(QFrame.Panel)
+            
+            # If the current image is highlighted, but shouldn't be
+            if (self.preLabels[i].label.lineWidth() == highlightWidth and not
+                    self.bigLabel.imageNr == self.preLabels[i].imageNr):
+                self.preLabels[i].label.setLineWidth(noHighlightWidth)
+                self.preLabels[i].label.setFrameShape(QFrame.NoFrame)
        
     def _setupQRCode(self):
         ''' Create the label to show the QR Code for and load the first QR-Code (if at least
@@ -221,6 +236,7 @@ class GUI(QMainWindow):
         existingImages = imgDir.count() - 2
         if (newImgNr < math.ceil(self.totalPreviewImages/2) or
             existingImages <= self.totalPreviewImages):
+            self._highlightActivePreview()
             return
         
         for i in range(self.totalPreviewImages-1, 0,-1):
@@ -234,6 +250,8 @@ class GUI(QMainWindow):
         if pixmap:
             self.preLabels[0].label.setPixmap(pixmap)
             self.preLabels[0].imageNr = newImgNr - math.floor(self.totalPreviewImages/2)
+        
+        self._highlightActivePreview()
         
         # === DEBUG ===
         pstr = ""
@@ -259,6 +277,7 @@ class GUI(QMainWindow):
         existingImages = imgDir.count() - 2
         if (newImgNr <= math.ceil(self.totalPreviewImages/2) or
             existingImages <= self.totalPreviewImages):
+            self._highlightActivePreview()
             return
         
         for i in range(0,self.totalPreviewImages-1, 1):
@@ -283,16 +302,14 @@ class GUI(QMainWindow):
             self.preLabels[self.totalPreviewImages-1].label.setPixmap(pix)
             self.preLabels[self.totalPreviewImages-1].imageNr = 0
 
+        self._highlightActivePreview()
+        
         # === DEBUG ===
         pstr = ""
         for i in range(len(self.preLabels)):
             pstr += str(self.preLabels[i].imageNr) + " "
         print("Scrolling finished. Position is: " + pstr)
-        
-      
-     
-        
-              
+  
 
     def setupSignals(self):
         pass
