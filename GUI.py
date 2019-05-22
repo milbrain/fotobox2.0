@@ -1,12 +1,16 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-import logging, qrcode, os.path, math, lorem
+import logging, qrcode, os.path, math, lorem, time
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtGui import QImage
 from PyQt5.QtWidgets import QLabel, QFrame
-from PyQt5.QtCore import QRect, QPoint, QDir#, pyqtSignal
+from PyQt5.QtCore import QRect, QPoint, QDir, pyqtSignal
 from PyQt5.Qt import *
+
+import RPi.GPIO as GPIO
+from picamera import PiCamera
+from gpiozero import Button
 
 class Record:
     pass
@@ -30,6 +34,8 @@ class GUI(QMainWindow):
                                         # only available after _setupBigImage
     preLabels       = []                # List of tuples of the same form as bigLabel, just for the preview labels
                                         # only available after _setupPreviewImages
+    
+    #pyQtSignal(str)
 
     def __init__(self, cont):
         super().__init__()
@@ -37,6 +43,34 @@ class GUI(QMainWindow):
         self.initUI()
         self.setupSignals()
 
+    def setupSignals(self):
+        GPIO.setmode(GPIO.BCM)
+        bounceT = 1000
+        
+        # Fototaster
+        GPIO.setup(17, GPIO.IN)
+        GPIO.add_event_detect(17, GPIO.RISING, callback=self.doPhoto, bouncetime=bounceT)
+        
+        # Links-Rechts Schalter
+        GPIO.setup(27, GPIO.IN)
+        GPIO.add_event_detect(27, GPIO.RISING, callback=self.scrollRight, bouncetime=bounceT)
+        GPIO.setup(22, GPIO.IN)
+        GPIO.add_event_detect(22, GPIO.RISING, callback=self.scrollLeft, bouncetime=bounceT)
+
+    def doPhoto(self, event):
+        previewRes = (1280, 1020)
+        fotoRes = (2800, 2100) #(3200, 2400)
+        camera = PiCamera()
+        camera.framerate = 15
+        camera.rotation = 0
+        #camera.preview_alpha = 150
+        camera.resolution = fotoRes
+        camera.start_preview(fullscreen=True)
+        camera.annotate_text = 'Hello World!'
+        time.sleep(3)
+        camera.capture('foo.jpg')
+        camera.stop_preview()
+        pass
 
     def initUI(self):
         ''' Inits all the UI elements on the main form . '''
@@ -73,10 +107,16 @@ class GUI(QMainWindow):
         self.explabel.show()
 
     def keyPressEvent(self, event):
-        if event.key() == QtCore.Qt.Key_Left:
-            self.scrollLeft()
-        elif event.key() == QtCore.Qt.Key_Right:
-            self.scrollRight()
+        #if event.key() == QtCore.Qt.Key_Left:
+        #    self.scrollLeft()
+        #elif event.key() == QtCore.Qt.Key_Right:
+        #    self.scrollRight(1)
+        if GPIO.event_detected(17):
+            print('Picture-Button pressed!')
+        if GPIO.event_detected(27):
+            print('Right-Scroll-Button pressed!')
+        if GPIO.event_detected(22):
+            print('Left-Scroll-Button pressed!')
 
     def _setupPreviewImages(self):
         ''' Loads all preview images into the form. '''
@@ -177,7 +217,7 @@ class GUI(QMainWindow):
             return False
 
         img = QImage(filepath)
-        pixmap = QtGui.QPixmap.fromImage(img.scaled(w, h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        pixmap = QtGui.QPixmap.fromImage(img.scaled(w, h, Qt.KeepAspectRatio, Qt.FastTransformation))
         self.bigLabel.label.setPixmap(pixmap)
         self.bigLabel.imageNr = imgNr
         return True
@@ -234,7 +274,7 @@ class GUI(QMainWindow):
         pixmap = QtGui.QPixmap(filepath)
         self.qrlabel.setPixmap(pixmap)
 
-    def scrollLeft(self):
+    def scrollLeft(self, event):
         newImgNr = self.bigLabel.imageNr - 1
 
         # bigPreviewImage
@@ -275,7 +315,7 @@ class GUI(QMainWindow):
             pstr += str(self.preLabels[i].imageNr) + " "
         print("Scrolling finished. Position is: " + pstr)
 
-    def scrollRight(self):
+    def scrollRight(self, event):
         newImgNr = self.bigLabel.imageNr + 1
 
         # bigPreviewImage
@@ -325,7 +365,3 @@ class GUI(QMainWindow):
         for i in range(len(self.preLabels)):
             pstr += str(self.preLabels[i].imageNr) + " "
         print("Scrolling finished. Position is: " + pstr)
-
-
-    def setupSignals(self):
-        pass
