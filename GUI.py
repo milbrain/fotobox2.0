@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-import logging, qrcode, os.path, math, lorem, time
+import logging, qrcode, os.path, math, lorem, time, threading
 
 from PyQt5 import QtWidgets, QtCore, QtGui
 from PyQt5.QtGui import QImage
@@ -10,10 +10,21 @@ from PyQt5.Qt import *
 
 import RPi.GPIO as GPIO
 from picamera import PiCamera
+import picamera
 from gpiozero import Button
 
 class Record:
     pass
+
+# TODO:
+'''
+- Farbe der Schrift ändern, sodass gute Sichtbarkeit
+- Fotoauflösung so hoch wie möglich
+- WiFi aufmachen und DNS hinpfuschen
+- Akutalisieren der neuen Bilder (leer setzen der beiden neuen beim reload)
+- Verstehen warum bei ScrollRight der eine Fall abgefangen wird (das Fill(0,0,0,0)) und der andere
+  zu dem -1 -1 führt
+'''
 
 class GUI(QMainWindow):
 
@@ -45,32 +56,65 @@ class GUI(QMainWindow):
 
     def setupSignals(self):
         GPIO.setmode(GPIO.BCM)
+        self.gpioPhoto = 17
+        self.gpioR = 27
+        self.gpioL = 22
+        bounceTBig = 8000
         bounceT = 1000
         
+        # Kamera
+        self.camera = PiCamera()
+        self.previewRes = (1280, 1020)
+        self.fotoRes = (2800, 2100) #(3200, 2400)
+        self.camera.annotate_text_size = 150
+        self.camera.framerate = 15
+        self.camera.rotation = 0
+        self.camLock = threading.Lock()
+        self.imgCount = QDir(self.imageFilepath).count() - 2
+        #print('total: %d' % (self.imgCount))
+        
         # Fototaster
-        GPIO.setup(17, GPIO.IN)
-        GPIO.add_event_detect(17, GPIO.RISING, callback=self.doPhoto, bouncetime=bounceT)
+        GPIO.setup(self.gpioPhoto, GPIO.IN)
+        GPIO.add_event_detect(self.gpioPhoto, GPIO.RISING, callback=self.doPhoto, bouncetime=bounceTBig)
         
         # Links-Rechts Schalter
-        GPIO.setup(27, GPIO.IN)
-        GPIO.add_event_detect(27, GPIO.RISING, callback=self.scrollRight, bouncetime=bounceT)
-        GPIO.setup(22, GPIO.IN)
-        GPIO.add_event_detect(22, GPIO.RISING, callback=self.scrollLeft, bouncetime=bounceT)
+        GPIO.setup(self.gpioR, GPIO.IN)
+        GPIO.add_event_detect(self.gpioR, GPIO.RISING, callback=self.scrollRight, bouncetime=bounceT)
+        GPIO.setup(self.gpioL, GPIO.IN)
+        GPIO.add_event_detect(self.gpioL, GPIO.RISING, callback=self.scrollLeft, bouncetime=bounceT)
 
     def doPhoto(self, event):
-        previewRes = (1280, 1020)
-        fotoRes = (2800, 2100) #(3200, 2400)
-        camera = PiCamera()
-        camera.framerate = 15
-        camera.rotation = 0
-        #camera.preview_alpha = 150
-        camera.resolution = fotoRes
-        camera.start_preview(fullscreen=True)
-        camera.annotate_text = 'Hello World!'
-        time.sleep(3)
-        camera.capture('foo.jpg')
-        camera.stop_preview()
-        pass
+        if self.camLock.acquire(blocking=False):
+            self.camera.resolution = self.previewRes
+            #self.annotate_background = picamera.color.Color('#000')
+            #self.annotate_foreground = picamera.color.Color('#000')
+            self.camera.start_preview(fullscreen=True)
+            
+            self.camera.annotate_text = '3'
+            time.sleep(1)
+            self.camera.annotate_text = '2'
+            time.sleep(1)
+            self.camera.annotate_text = '1'
+            time.sleep(1)
+            self.camera.annotate_text = ''
+            #self.annotate_background = None
+            self.camera.stop_preview()
+            self.camera.resolution = self.fotoRes
+            
+            self.imgCount = self.imgCount + 1
+            self.camera.capture(self.imageFilepath + 'P' + str(self.imgCount) + '.jpg')
+            
+            print("Foto gemacht: Nr. %d" % (self.imgCount))
+
+            self.camLock.release()
+            self.generatePreviewImage(self.imgCount)
+            print('aktuelles großes bild (vor dem scrollRight) ist gerade: ' + str(self.bigLabel.imageNr))
+            
+            self.ReloadAllPreviews()
+            #self.scrollRight('hier könnte ihre werbung stehen')
+            
+        else:
+            return
 
     def initUI(self):
         ''' Inits all the UI elements on the main form . '''
@@ -320,13 +364,14 @@ class GUI(QMainWindow):
 
         # bigPreviewImage
         if newImgNr <= 0 or not self.loadBigImage(newImgNr, self.bigImageSize.x(), self.bigImageSize.y()):
+            print('es soll nichts verändert werden, da es nichts zu scrollen gibt')
             return
 
         # QR-Code
         self.generateOrLoadQR(newImgNr)
 
         # set new Image Number because everything worked out
-        self.bigLabel.imageNr = newImgNr
+        #self.bigLabel.imageNr = newImgNr
 
         # Realign small preview images (if neccessary)
         imgDir = QDir(self.imageFilepath)
@@ -334,6 +379,7 @@ class GUI(QMainWindow):
         if (newImgNr <= math.ceil(self.totalPreviewImages/2) or
             existingImages <= self.totalPreviewImages):
             self._highlightActivePreview()
+            print('zu früh')
             return
 
         for i in range(0,self.totalPreviewImages-1, 1):
@@ -347,12 +393,30 @@ class GUI(QMainWindow):
                 self.preLabels[i].label.setPixmap(pix)
                 self.preLabels[i].imageNr = 0
 
-        # Load new picture into rightmost preview label
-        pixmap = self.generatePreviewImage(newImgNr + math.floor(self.totalPreviewImages/2))
+        # Decide where to load the new picture. Start assuming it is the rightmost preview label
+        imgToLoad = newImgNr + math.floor(self.totalPreviewImages/2)
+        emptyLabels = 0
+        # Formula only holds if normal scrolling is performed. We need an extra check if a picture
+        # was just made
+        if (self.preLabels[self.totalPreviewImages-1] 
+                and self.preLabels[self.totalPreviewImages-1].imageNr == 0):
+            print('-1')
+            imgToLoad = imgToLoad - 1
+            emptyLabels = emptyLabels + 1
+        if (self.preLabels[self.totalPreviewImages-1] 
+                and self.preLabels[self.totalPreviewImages-1].imageNr == 0):
+            print('-1')
+            imgToLoad = imgToLoad - 1
+            emptyLabels = emptyLabels + 1
+        
+        print('Should generate img number ' + str(imgToLoad))
+        
+        pixmap = self.generatePreviewImage(imgToLoad)
         if pixmap:
-            self.preLabels[self.totalPreviewImages-1].label.setPixmap(pixmap)
-            self.preLabels[self.totalPreviewImages-1].imageNr = newImgNr + math.floor(self.totalPreviewImages/2)
+            self.preLabels[self.totalPreviewImages - 1 - emptyLabels].label.setPixmap(pixmap)
+            self.preLabels[self.totalPreviewImages - 1 - emptyLabels].imageNr = imgToLoad
         else:
+            print('Dieser Fall darf ab und zu auftreten')
             pix = QPixmap(self.previewImageSize.x(), self.previewImageSize.y())
             pix.fill(QColor(0,0,0,0))
             self.preLabels[self.totalPreviewImages-1].label.setPixmap(pix)
@@ -365,3 +429,18 @@ class GUI(QMainWindow):
         for i in range(len(self.preLabels)):
             pstr += str(self.preLabels[i].imageNr) + " "
         print("Scrolling finished. Position is: " + pstr)
+        
+    def ReloadAllPreviews(self):
+        ''' Reload all previews and jump to newest picture. '''
+        imgDir = QDir(self.imageFilepath)
+        existingImages = imgDir.count() - 2
+        self.bigLabel.imageNr = existingImages
+        
+        self.loadBigImage(self.bigLabel.imageNr, self.bigImageSize.x(), self.bigImageSize.y())
+        
+        for i in range(round(self.totalPreviewImages/2)+1):     
+            pixmap = self.generatePreviewImage(self.bigLabel.imageNr - math.floor(self.totalPreviewImages/2) + i)
+            if pixmap:
+                self.preLabels[i].label.setPixmap(pixmap)
+                self.preLabels[i].imageNr = self.bigLabel.imageNr - math.floor(self.totalPreviewImages/2) + i
+                print('loaded img nr. ' + str(self.bigLabel.imageNr - math.floor(self.totalPreviewImages/2) + i) + ' into label nr. ' + str(i))
