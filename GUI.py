@@ -18,12 +18,17 @@ class Record:
 
 # TODO:
 '''
-- Farbe der Schrift ändern, sodass gute Sichtbarkeit
-- Fotoauflösung so hoch wie möglich
-- WiFi aufmachen und DNS hinpfuschen
-- Akutalisieren der neuen Bilder (leer setzen der beiden neuen beim reload)
-- Verstehen warum bei ScrollRight der eine Fall abgefangen wird (das Fill(0,0,0,0)) und der andere
-  zu dem -1 -1 führt
+Feature (F) / Bug (B) / Codeupdate (U)
+- F     WiFi aufmachen und DNS hinpfuschen
+- F     2. QR-Code einfügen um das Verbinden mit dem WLAN zu erleichtern
+- F     MainHintergrund in schön (wie auch immer), bpsw muster oder hintergrundbild reinladen
+- U     generelles codeupdate 
+- U     Verstehen warum bei ScrollRight der eine Fall abgefangen wird (das Fill(0,0,0,0)) und der andere
+        zu dem -1 -1 führt
+- B     QBasiTimer Fehler entfernen
+ 
+
+  
 '''
 
 class GUI(QMainWindow):
@@ -34,9 +39,9 @@ class GUI(QMainWindow):
     imageFilepath   = 'res/img/'
     previewFilepath = 'res/preview/'
 
-    formSize = QPoint(1000,700)         # main form
+    formSize = QPoint(1920,1080)         # main form
 
-    previewImageSize = QPoint(165, 165)
+    previewImageSize = QPoint(225, 150)
     totalPreviewImages = 5
 
     bigImageSize    = None              # is only set after the first call to _setupBigImage
@@ -64,8 +69,8 @@ class GUI(QMainWindow):
         
         # Kamera
         self.camera = PiCamera()
-        self.previewRes = (1280, 1020)
-        self.fotoRes = (2800, 2100) #(3200, 2400)
+        self.previewRes = (1530, 1020)
+        self.fotoRes = (3150, 2100) #(3200, 2400)
         self.camera.annotate_text_size = 150
         self.camera.framerate = 15
         self.camera.rotation = 0
@@ -86,15 +91,16 @@ class GUI(QMainWindow):
     def doPhoto(self, event):
         if self.camLock.acquire(blocking=False):
             self.camera.resolution = self.previewRes
-            #self.annotate_background = picamera.color.Color('#000')
-            #self.annotate_foreground = picamera.color.Color('#000')
+            self.camera.annotate_background = picamera.color.Color('#fff')
+            self.camera.annotate_foreground = picamera.color.Color('#000')
+            self.blackbox.show()        # Auskommentieren hiervon behebt QBasicTimer Fehler
             self.camera.start_preview(fullscreen=True)
             
-            self.camera.annotate_text = '3'
+            self.camera.annotate_text = ' 3 '
             time.sleep(1)
-            self.camera.annotate_text = '2'
+            self.camera.annotate_text = ' 2 '
             time.sleep(1)
-            self.camera.annotate_text = '1'
+            self.camera.annotate_text = ' 1 '
             time.sleep(1)
             self.camera.annotate_text = ''
             #self.annotate_background = None
@@ -103,6 +109,7 @@ class GUI(QMainWindow):
             
             self.imgCount = self.imgCount + 1
             self.camera.capture(self.imageFilepath + 'P' + str(self.imgCount) + '.jpg')
+            self.blackbox.hide()  # Auskommentieren hiervon behebt QBasicTimer Fehler
             
             print("Foto gemacht: Nr. %d" % (self.imgCount))
 
@@ -111,6 +118,7 @@ class GUI(QMainWindow):
             print('aktuelles großes bild (vor dem scrollRight) ist gerade: ' + str(self.bigLabel.imageNr))
             
             self.ReloadAllPreviews()
+            self.generateOrLoadQR(self.bigLabel.imageNr)
             #self.scrollRight('hier könnte ihre werbung stehen')
             
         else:
@@ -119,26 +127,35 @@ class GUI(QMainWindow):
     def initUI(self):
         ''' Inits all the UI elements on the main form . '''
         # Params start
-        canvasSize = QPoint(100,100)        # canvas to draw on
+        #canvasSize = QPoint(100,100)        # canvas to draw on
         # Params end
 
         # Main Window
-        self.resize(self.formSize.x(), self.formSize.y())
-        self.setGeometry(QtWidgets.QStyle.alignedRect(QtCore.Qt.LeftToRight, QtCore.Qt.AlignCenter,
-                                                      self.size(), QApplication.desktop().availableGeometry()))
+        #self.resize(self.formSize.x(), self.formSize.y())
+        #self.setGeometry(QtWidgets.QStyle.alignedRect(QtCore.Qt.LeftToRight, QtCore.Qt.AlignCenter,
+        #                                              self.size(), QApplication.desktop().availableGeometry()))
         self.setWindowTitle('Fotobox v2.0')
-        self.show()
+        #self.show()
+        self.showFullScreen()
 
         self._setupBigImage()
         self._setupPreviewImages()
         self._setupQRCode()
         self._setupExplanation()
+        self._setupBlackbox()   # has to be created last, to have biggest z-value, to appear on top of rest
+        #self.grabKeyboard()     # grabs all keyboard inputs to be handled for scrolling through preview images
 
-        self.grabKeyboard()     # grabs all keyboard inputs to be handled for scrolling through preview images
+    def _setupBlackbox(self):
+        ''' set up the black box to aid for camera preview. '''
+        # Auskommentieren hiervon behebt QBasicTimer Fehler
+        self.blackbox = QtWidgets.QLabel(self)
+        self.blackbox.setGeometry(0,0,self.formSize.x(), self.formSize.y())
+        self.blackbox.setStyleSheet("QLabel {background-color: black}")
+        
 
     def _setupExplanation(self):
         ''' Sets up the HOWTO connect to the Pi to download a picture via QR code. '''
-        expSize = QPoint(165,250)
+        expSize = QPoint(396,400)
         size = QRect(self.qrlabel.pos().x(), self.qrlabel.pos().y() + self.qrlabel.size().height() + 10 , expSize.x(), expSize.y())
         self.explabel = QtWidgets.QLabel(self)
         self.explabel.setGeometry(size)
@@ -231,14 +248,15 @@ class GUI(QMainWindow):
 
         img = QImage(fullImgPath)
         pixmap = QtGui.QPixmap.fromImage(img.scaled(self.previewImageSize.x(), self.previewImageSize.y(),
-                                                    Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                                                    Qt.KeepAspectRatio, Qt.FastTransformation))
         pixmap.save(prePath)
         return pixmap
 
     def _setupBigImage(self):
         ''' Load newest picture into the bigLabel. '''
-        bigWidth = self.formSize.x() - 165 - 10 - 20 # qrWidth, border, inBetweenSpace
+        #bigWidth = self.formSize.x() - qrSize8273737 - 10 - 20 # qrWidth, border, inBetweenSpace
         bigHeight = self.formSize.y() - self.previewImageSize.y() - 10 - 20
+        bigWidth = round(bigHeight * (3 / 2))
         size = QRect(10, 10, bigWidth, bigHeight)
         self.bigImageSize = QPoint(bigWidth, bigHeight)
 
@@ -269,7 +287,7 @@ class GUI(QMainWindow):
     def _highlightActivePreview(self):
         ''' Change the border of the preview labels to adequately highlight the image
         currently beeing displayed in bigLabel. '''
-        highlightWidth = 3
+        highlightWidth = 10
         noHighlightWidth = 0
 
         for i in range(self.totalPreviewImages):
@@ -289,7 +307,7 @@ class GUI(QMainWindow):
         ''' Create the label to show the QR Code for and load the first QR-Code (if at least
         one image exists in the image folder already). '''
         # Label for display of QR code
-        qrSize = QPoint(165,165)
+        qrSize = QPoint(396,396)
         size = QRect(self.formSize.x() - qrSize.x() - 10, 10, qrSize.x(), qrSize.y())
         self.qrlabel = QtWidgets.QLabel(self)
         self.qrlabel.setGeometry(size)
@@ -306,9 +324,9 @@ class GUI(QMainWindow):
             qr = qrcode.QRCode(
                 version=1,
                 error_correction=qrcode.constants.ERROR_CORRECT_L,
-                box_size=5,
+                box_size=12,
                 border=2,
-            )   # with these options => size = 165px x 165px
+            )   # with these options => 396px x 396px // boxSize = 5 => 165px x 165px
             qrstring = "http://" + self.controls.dnsString + "/?getImageNr=" + str(imgNr)
             qr.add_data(qrstring)
             qr.make(fit=True)
@@ -416,7 +434,7 @@ class GUI(QMainWindow):
             self.preLabels[self.totalPreviewImages - 1 - emptyLabels].label.setPixmap(pixmap)
             self.preLabels[self.totalPreviewImages - 1 - emptyLabels].imageNr = imgToLoad
         else:
-            print('Dieser Fall darf ab und zu auftreten')
+            print('Leeres Pixmap wird erstellt für img an der stelle ', (self.totalPreviewImages-1))
             pix = QPixmap(self.previewImageSize.x(), self.previewImageSize.y())
             pix.fill(QColor(0,0,0,0))
             self.preLabels[self.totalPreviewImages-1].label.setPixmap(pix)
@@ -438,9 +456,14 @@ class GUI(QMainWindow):
         
         self.loadBigImage(self.bigLabel.imageNr, self.bigImageSize.x(), self.bigImageSize.y())
         
-        for i in range(round(self.totalPreviewImages/2)+1):     
+        for i in range(self.totalPreviewImages):    
             pixmap = self.generatePreviewImage(self.bigLabel.imageNr - math.floor(self.totalPreviewImages/2) + i)
             if pixmap:
                 self.preLabels[i].label.setPixmap(pixmap)
                 self.preLabels[i].imageNr = self.bigLabel.imageNr - math.floor(self.totalPreviewImages/2) + i
                 print('loaded img nr. ' + str(self.bigLabel.imageNr - math.floor(self.totalPreviewImages/2) + i) + ' into label nr. ' + str(i))
+            else:
+                pix = QPixmap(self.previewImageSize.x(), self.previewImageSize.y())
+                pix.fill(QColor(0,0,0,0))
+                self.preLabels[i].label.setPixmap(pix)
+                self.preLabels[i].imageNr = 0
